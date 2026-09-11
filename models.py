@@ -20,6 +20,7 @@ class Account(Base):
     account_type = Column(String, nullable=False)
     balance = Column(Numeric(12, 2), default=0)
     interest_rate = Column(Numeric(5, 2), default=0)
+    notes = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

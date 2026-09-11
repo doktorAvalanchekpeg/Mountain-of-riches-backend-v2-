@@ -11,8 +11,6 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-
 class Account(Base):
     __tablename__ = "accounts"
 
@@ -21,7 +19,9 @@ class Account(Base):
     name = Column(String, nullable=False)
     account_type = Column(String, nullable=False)
     balance = Column(Numeric(12, 2), default=0)
+    interest_rate = Column(Numeric(5, 2), default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
 
 class Transaction(Base):
     __tablename__ = "transactions"

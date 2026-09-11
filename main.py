@@ -375,3 +375,46 @@ def check_affordability(amount: float, days_from_now: int, db: Session = Depends
         "projected_balance_after_purchase": round(projected_balance_after_purchase, 2),
         "can_afford": projected_balance_after_purchase >= 0
     }
+
+@app.get("/accounts/{account_id}/payoff")
+def debt_payoff_timeline(account_id: int, monthly_payment: float, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    account = db.query(Account).filter(Account.id == account_id, Account.user_id == current_user.id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    balance = abs(float(account.balance))
+    annual_rate = float(account.interest_rate)
+    monthly_rate = annual_rate / 100 / 12
+
+    if balance == 0:
+        return {"message": "This account has no balance to pay off"}
+
+    if monthly_rate == 0:
+        months_to_payoff = balance / monthly_payment
+        total_interest = 0
+    else:
+        min_payment_needed = balance * monthly_rate
+        if monthly_payment <= min_payment_needed:
+            raise HTTPException(status_code=400, detail="Monthly payment is too low to ever pay off this balance at the current interest rate")
+
+        months_to_payoff = -(1 / (30 * (1 / 365))) * 1
+        n = 0
+        remaining = balance
+        total_paid = 0
+        while remaining > 0 and n < 600:
+            interest_charge = remaining * monthly_rate
+            remaining = remaining + interest_charge - monthly_payment
+            total_paid += monthly_payment
+            n += 1
+        months_to_payoff = n
+        total_interest = total_paid - balance
+
+    return {
+        "account_name": account.name,
+        "current_balance": balance,
+        "interest_rate": annual_rate,
+        "monthly_payment": monthly_payment,
+        "months_to_payoff": months_to_payoff,
+        "years_to_payoff": round(months_to_payoff / 12, 1),
+        "total_interest_paid": round(total_interest, 2)
+    }

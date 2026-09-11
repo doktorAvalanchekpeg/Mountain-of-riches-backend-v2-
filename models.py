@@ -53,3 +53,15 @@ class SavingsGoal(Base):
     current_amount = Column(Numeric(12, 2), default=0)
     target_date = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class RecurringTransaction(Base):
+    __tablename__ = "recurring_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    category = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    frequency = Column(String, nullable=False)
+    next_occurrence = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

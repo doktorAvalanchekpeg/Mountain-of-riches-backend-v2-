@@ -22,3 +22,14 @@ class Account(Base):
     account_type = Column(String, nullable=False)
     balance = Column(Numeric(12, 2), default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id"), nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    category = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    transaction_date = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

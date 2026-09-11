@@ -282,3 +282,31 @@ def delete_budget(budget_id: int, db: Session = Depends(get_db), current_user: U
     db.delete(db_budget)
     db.commit()
     return {"message": "Budget deleted successfully"}
+
+@app.get("/budgets/status")
+def budget_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    budgets = db.query(Budget).filter(Budget.user_id == current_user.id).all()
+
+    now = datetime.utcnow()
+    start_of_month = datetime(now.year, now.month, 1)
+
+    results = []
+    for b in budgets:
+        spent = db.query(Transaction).join(Account).filter(
+            Account.user_id == current_user.id,
+            Transaction.category == b.category,
+            Transaction.transaction_date >= start_of_month,
+            Transaction.amount < 0
+        ).all()
+
+        total_spent = sum(abs(float(t.amount)) for t in spent)
+
+        results.append({
+            "category": b.category,
+            "monthly_limit": float(b.monthly_limit),
+            "spent_this_month": total_spent,
+            "remaining": float(b.monthly_limit) - total_spent,
+            "over_budget": total_spent > float(b.monthly_limit)
+        })
+
+    return results

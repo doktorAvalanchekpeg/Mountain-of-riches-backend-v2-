@@ -90,3 +90,31 @@ def list_accounts(db: Session = Depends(get_db), current_user: User = Depends(ge
         }
         for a in accounts
     ]
+
+@app.put("/accounts/{account_id}")
+def update_account(account_id: int, account: AccountCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_account = db.query(Account).filter(Account.id == account_id, Account.user_id == current_user.id).first()
+    if not db_account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    db_account.name = account.name
+    db_account.account_type = account.account_type
+    db_account.balance = account.balance
+    db.commit()
+    db.refresh(db_account)
+    return {
+        "id": db_account.id,
+        "name": db_account.name,
+        "account_type": db_account.account_type,
+        "balance": float(db_account.balance)
+    }
+
+@app.delete("/accounts/{account_id}")
+def delete_account(account_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_account = db.query(Account).filter(Account.id == account_id, Account.user_id == current_user.id).first()
+    if not db_account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    db.delete(db_account)
+    db.commit()
+    return {"message": "Account deleted successfully"}

@@ -42,3 +42,14 @@ class Budget(Base):
     category = Column(String, nullable=False)
     monthly_limit = Column(Numeric(12, 2), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class SavingsGoal(Base):
+    __tablename__ = "savings_goals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String, nullable=False)
+    target_amount = Column(Numeric(12, 2), nullable=False)
+    current_amount = Column(Numeric(12, 2), default=0)
+    target_date = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

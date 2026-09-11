@@ -171,4 +171,4 @@ def export_transactions_csv(account_id: int, db: Session = Depends(get_db), curr
         io.BytesIO(output.getvalue().encode()),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=transactions_account_{account_id}.csv"}
-    )wc -l routers/projection_routes.p
+    )

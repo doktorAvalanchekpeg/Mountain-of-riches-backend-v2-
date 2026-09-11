@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from database import engine
-from models import Base, User, Account, Transaction
+from models import Base, User, Account, Transaction, Budget
 from auth import hash_password, verify_password, create_access_token, get_current_user_email
 from sqlalchemy.orm import sessionmaker
 
@@ -224,3 +224,61 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db), curre
     db.commit()
 
     return {"message": "Transaction deleted successfully"}
+
+class BudgetCreate(BaseModel):
+    category: str
+    monthly_limit: float
+
+@app.post("/budgets")
+def create_budget(budget: BudgetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    new_budget = Budget(
+        user_id=current_user.id,
+        category=budget.category,
+        monthly_limit=budget.monthly_limit
+    )
+    db.add(new_budget)
+    db.commit()
+    db.refresh(new_budget)
+    return {
+        "id": new_budget.id,
+        "category": new_budget.category,
+        "monthly_limit": float(new_budget.monthly_limit)
+    }
+
+@app.get("/budgets")
+def list_budgets(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    budgets = db.query(Budget).filter(Budget.user_id == current_user.id).all()
+    return [
+        {
+            "id": b.id,
+            "category": b.category,
+            "monthly_limit": float(b.monthly_limit)
+        }
+        for b in budgets
+    ]
+
+@app.put("/budgets/{budget_id}")
+def update_budget(budget_id: int, budget: BudgetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_budget = db.query(Budget).filter(Budget.id == budget_id, Budget.user_id == current_user.id).first()
+    if not db_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    db_budget.category = budget.category
+    db_budget.monthly_limit = budget.monthly_limit
+    db.commit()
+    db.refresh(db_budget)
+    return {
+        "id": db_budget.id,
+        "category": db_budget.category,
+        "monthly_limit": float(db_budget.monthly_limit)
+    }
+
+@app.delete("/budgets/{budget_id}")
+def delete_budget(budget_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_budget = db.query(Budget).filter(Budget.id == budget_id, Budget.user_id == current_user.id).first()
+    if not db_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    db.delete(db_budget)
+    db.commit()
+    return {"message": "Budget deleted successfully"}

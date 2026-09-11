@@ -345,3 +345,33 @@ def project_balance(days: int, db: Session = Depends(get_db), current_user: User
         "days_projected": days,
         "projected_balance": round(projected_balance, 2)
     }
+
+@app.get("/projections/affordability")
+def check_affordability(amount: float, days_from_now: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    accounts = db.query(Account).filter(Account.user_id == current_user.id).all()
+    if not accounts:
+        raise HTTPException(status_code=404, detail="No accounts found")
+
+    current_total_balance = sum(float(a.balance) for a in accounts)
+
+    account_ids = [a.id for a in accounts]
+    all_transactions = db.query(Transaction).filter(Transaction.account_id.in_(account_ids)).all()
+
+    if not all_transactions:
+        average_daily_net = 0
+    else:
+        earliest_date = min(t.transaction_date for t in all_transactions)
+        days_of_history = max((datetime.utcnow() - earliest_date).days, 1)
+        net_total = sum(float(t.amount) for t in all_transactions)
+        average_daily_net = net_total / days_of_history
+
+    projected_balance_before_purchase = current_total_balance + (average_daily_net * days_from_now)
+    projected_balance_after_purchase = projected_balance_before_purchase - amount
+
+    return {
+        "purchase_amount": amount,
+        "days_from_now": days_from_now,
+        "projected_balance_before_purchase": round(projected_balance_before_purchase, 2),
+        "projected_balance_after_purchase": round(projected_balance_after_purchase, 2),
+        "can_afford": projected_balance_after_purchase >= 0
+    }

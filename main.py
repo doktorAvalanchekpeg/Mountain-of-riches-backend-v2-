@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from database import engine
 from models import Base, User
-from auth import hash_password, verify_password, create_access_token
+from auth import hash_password, verify_password, create_access_token, get_current_user_email
 from sqlalchemy.orm import sessionmaker
 
 app = FastAPI()
@@ -47,3 +47,6 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
 
     token = create_access_token(data={"sub": db_user.email})
     return {"access_token": token, "token_type": "bearer"}
+@app.get("/me")
+def read_current_user(current_user_email: str = Depends(get_current_user_email)):
+    return {"email": current_user_email}

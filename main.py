@@ -310,3 +310,38 @@ def budget_status(db: Session = Depends(get_db), current_user: User = Depends(ge
         })
 
     return results
+
+@app.get("/projections/balance")
+def project_balance(days: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    accounts = db.query(Account).filter(Account.user_id == current_user.id).all()
+    if not accounts:
+        raise HTTPException(status_code=404, detail="No accounts found")
+
+    current_total_balance = sum(float(a.balance) for a in accounts)
+
+    account_ids = [a.id for a in accounts]
+    all_transactions = db.query(Transaction).filter(Transaction.account_id.in_(account_ids)).all()
+
+    if not all_transactions:
+        return {
+            "current_balance": current_total_balance,
+            "projected_balance": current_total_balance,
+            "days_projected": days,
+            "note": "No transaction history yet, projection assumes no change"
+        }
+
+    earliest_date = min(t.transaction_date for t in all_transactions)
+    days_of_history = max((datetime.utcnow() - earliest_date).days, 1)
+
+    net_total = sum(float(t.amount) for t in all_transactions)
+    average_daily_net = net_total / days_of_history
+
+    projected_change = average_daily_net * days
+    projected_balance = current_total_balance + projected_change
+
+    return {
+        "current_balance": current_total_balance,
+        "average_daily_net": round(average_daily_net, 2),
+        "days_projected": days,
+        "projected_balance": round(projected_balance, 2)
+    }

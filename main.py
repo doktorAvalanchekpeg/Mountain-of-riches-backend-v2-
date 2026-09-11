@@ -2,9 +2,11 @@ from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 from pydantic import BaseModel
+from datetime import datetime
+from decimal import Decimal
 
 from database import engine
-from models import Base, User, Account
+from models import Base, User, Account, Transaction
 from auth import hash_password, verify_password, create_access_token, get_current_user_email
 from sqlalchemy.orm import sessionmaker
 
@@ -18,11 +20,13 @@ def get_db():
         yield db
     finally:
         db.close()
+
 def get_current_user(db: Session = Depends(get_db), current_user_email: str = Depends(get_current_user_email)):
     user = db.query(User).filter(User.email == current_user_email).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
+
 class UserCreate(BaseModel):
     email: str
     password: str
@@ -51,6 +55,7 @@ def login(user: UserCreate, db: Session = Depends(get_db)):
 
     token = create_access_token(data={"sub": db_user.email})
     return {"access_token": token, "token_type": "bearer"}
+
 @app.get("/me")
 def read_current_user(current_user_email: str = Depends(get_current_user_email)):
     return {"email": current_user_email}
@@ -118,3 +123,56 @@ def delete_account(account_id: int, db: Session = Depends(get_db), current_user:
     db.delete(db_account)
     db.commit()
     return {"message": "Account deleted successfully"}
+
+class TransactionCreate(BaseModel):
+    account_id: int
+    amount: float
+    category: str
+    description: str = None
+    transaction_date: datetime
+
+@app.post("/transactions")
+def create_transaction(transaction: TransactionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    account = db.query(Account).filter(Account.id == transaction.account_id, Account.user_id == current_user.id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    new_transaction = Transaction(
+        account_id=transaction.account_id,
+        amount=transaction.amount,
+        category=transaction.category,
+        description=transaction.description,
+        transaction_date=transaction.transaction_date
+    )
+    db.add(new_transaction)
+
+    account.balance = account.balance + Decimal(str(transaction.amount))
+    db.commit()
+    db.refresh(new_transaction)
+
+    return {
+        "id": new_transaction.id,
+        "account_id": new_transaction.account_id,
+        "amount": float(new_transaction.amount),
+        "category": new_transaction.category,
+        "description": new_transaction.description,
+        "transaction_date": new_transaction.transaction_date
+    }
+
+@app.get("/accounts/{account_id}/transactions")
+def list_transactions(account_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    account = db.query(Account).filter(Account.id == account_id, Account.user_id == current_user.id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    transactions = db.query(Transaction).filter(Transaction.account_id == account_id).all()
+    return [
+        {
+            "id": t.id,
+            "amount": float(t.amount),
+            "category": t.category,
+            "description": t.description,
+            "transaction_date": t.transaction_date
+        }
+        for t in transactions
+    ]

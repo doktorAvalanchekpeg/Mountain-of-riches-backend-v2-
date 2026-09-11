@@ -176,3 +176,51 @@ def list_transactions(account_id: int, db: Session = Depends(get_db), current_us
         }
         for t in transactions
     ]
+
+@app.put("/transactions/{transaction_id}")
+def update_transaction(transaction_id: int, transaction: TransactionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_transaction = db.query(Transaction).join(Account).filter(
+        Transaction.id == transaction_id,
+        Account.user_id == current_user.id
+    ).first()
+    if not db_transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    account = db.query(Account).filter(Account.id == db_transaction.account_id).first()
+    account.balance = account.balance - db_transaction.amount
+
+    db_transaction.amount = transaction.amount
+    db_transaction.category = transaction.category
+    db_transaction.description = transaction.description
+    db_transaction.transaction_date = transaction.transaction_date
+
+    account.balance = account.balance + Decimal(str(transaction.amount))
+
+    db.commit()
+    db.refresh(db_transaction)
+
+    return {
+        "id": db_transaction.id,
+        "account_id": db_transaction.account_id,
+        "amount": float(db_transaction.amount),
+        "category": db_transaction.category,
+        "description": db_transaction.description,
+        "transaction_date": db_transaction.transaction_date
+    }
+
+@app.delete("/transactions/{transaction_id}")
+def delete_transaction(transaction_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    db_transaction = db.query(Transaction).join(Account).filter(
+        Transaction.id == transaction_id,
+        Account.user_id == current_user.id
+    ).first()
+    if not db_transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    account = db.query(Account).filter(Account.id == db_transaction.account_id).first()
+    account.balance = account.balance - db_transaction.amount
+
+    db.delete(db_transaction)
+    db.commit()
+
+    return {"message": "Transaction deleted successfully"}

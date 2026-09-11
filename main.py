@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 from pydantic import BaseModel
 from datetime import datetime, timedelta
+from apscheduler.schedulers.background import BackgroundScheduler
 from decimal import Decimal
 from models import Base, User, Account, Transaction, Budget, SavingsGoal, RecurringTransaction
 from database import engine
@@ -642,3 +643,40 @@ def export_transactions_csv(account_id: int, db: Session = Depends(get_db), curr
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=transactions_account_{account_id}.csv"}
     )
+
+def process_all_due_recurring_transactions():
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        due_rules = db.query(RecurringTransaction).filter(RecurringTransaction.next_occurrence <= now).all()
+
+        for rule in due_rules:
+            account = db.query(Account).filter(Account.id == rule.account_id).first()
+            if not account:
+                continue
+
+            new_transaction = Transaction(
+                account_id=rule.account_id,
+                amount=rule.amount,
+                category=rule.category,
+                description=rule.description,
+                transaction_date=rule.next_occurrence
+            )
+            db.add(new_transaction)
+            account.balance = account.balance + Decimal(str(rule.amount))
+
+            if rule.frequency == "weekly":
+                rule.next_occurrence = rule.next_occurrence + timedelta(days=7)
+            elif rule.frequency == "biweekly":
+                rule.next_occurrence = rule.next_occurrence + timedelta(days=14)
+            elif rule.frequency == "monthly":
+                rule.next_occurrence = rule.next_occurrence + timedelta(days=30)
+
+        db.commit()
+        print(f"[Scheduler] Processed {len(due_rules)} due recurring transactions")
+    finally:
+        db.close()
+
+scheduler = BackgroundScheduler()
+scheduler.add_job(process_all_due_recurring_transactions, "interval", hours=24)
+scheduler.start()

@@ -1,4 +1,7 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi.responses import StreamingResponse
+import csv
+import io
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 from pydantic import BaseModel
@@ -584,3 +587,58 @@ def run_due_recurring_transactions(db: Session = Depends(get_db), current_user: 
         "transactions_created": len(created_transactions),
         "details": created_transactions
     }
+
+@app.post("/accounts/{account_id}/transactions/import")
+async def import_transactions_csv(account_id: int, file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    account = db.query(Account).filter(Account.id == account_id, Account.user_id == current_user.id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    content = await file.read()
+    decoded = content.decode("utf-8")
+    reader = csv.DictReader(io.StringIO(decoded))
+
+    imported_count = 0
+    for row in reader:
+        try:
+            amount = float(row["amount"])
+            category = row["category"]
+            description = row.get("description", "")
+            transaction_date = datetime.fromisoformat(row["transaction_date"])
+        except (KeyError, ValueError):
+            continue
+
+        new_transaction = Transaction(
+            account_id=account_id,
+            amount=amount,
+            category=category,
+            description=description,
+            transaction_date=transaction_date
+        )
+        db.add(new_transaction)
+        account.balance = account.balance + Decimal(str(amount))
+        imported_count += 1
+
+    db.commit()
+    return {"message": f"Imported {imported_count} transactions successfully"}
+
+@app.get("/accounts/{account_id}/transactions/export")
+def export_transactions_csv(account_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    account = db.query(Account).filter(Account.id == account_id, Account.user_id == current_user.id).first()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    transactions = db.query(Transaction).filter(Transaction.account_id == account_id).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["amount", "category", "description", "transaction_date"])
+    for t in transactions:
+        writer.writerow([float(t.amount), t.category, t.description or "", t.transaction_date.isoformat()])
+
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=transactions_account_{account_id}.csv"}
+    )

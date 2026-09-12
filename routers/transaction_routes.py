@@ -1,20 +1,25 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from decimal import Decimal
-
 from models import User, Account, Transaction
 from dependencies import get_db, get_current_user
 
 router = APIRouter()
-
 class TransactionCreate(BaseModel):
     account_id: int
-    amount: float
-    category: str
-    description: str = None
+    amount: float = Field(...)
+    category: str = Field(..., min_length=1, max_length=100)
+    description: str = Field(None, max_length=500)
     transaction_date: datetime
+
+    @field_validator("amount")
+    @classmethod
+    def amount_not_zero(cls, v):
+        if v == 0:
+            raise ValueError("amount cannot be zero")
+        return v
 
 @router.post("/transactions")
 def create_transaction(transaction: TransactionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

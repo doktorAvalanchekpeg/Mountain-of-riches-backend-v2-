@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 from models import User, Account, Transaction, Budget
@@ -9,8 +9,10 @@ from dependencies import get_db, get_current_user
 router = APIRouter()
 
 class BudgetCreate(BaseModel):
-    category: str
-    monthly_limit: float
+    category: str = Field(..., min_length=1, max_length=100)
+    monthly_limit: float = Field(..., gt=0)
+ 
+ 
 
 @router.post("/budgets")
 def create_budget(budget: BudgetCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

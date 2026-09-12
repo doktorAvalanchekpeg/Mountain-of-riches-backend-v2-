@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from models import User, Account
 from dependencies import get_db, get_current_user
@@ -8,9 +8,9 @@ from dependencies import get_db, get_current_user
 router = APIRouter()
 
 class AccountCreate(BaseModel):
-    name: str
-    account_type: str
-    balance: float = 0
+    name: str = Field(..., min_length=1, max_length=100)
+    account_type: str = Field(..., min_length=1, max_length=100)
+    balance: float = Field(0, ge=0)
 
 @router.post("/accounts")
 def create_account(account: AccountCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

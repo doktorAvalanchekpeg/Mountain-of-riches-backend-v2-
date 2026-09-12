@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
 from datetime import datetime
 
 from models import User, SavingsGoal
@@ -9,9 +9,9 @@ from dependencies import get_db, get_current_user
 router = APIRouter()
 
 class SavingsGoalCreate(BaseModel):
-    name: str
-    target_amount: float
-    current_amount: float = 0
+    name: str = Field(..., min_length=1, max_length=100)
+    target_amount: float = Field(..., gt=0)
+    current_amount: float = Field(0, ge=0)
     target_date: datetime = None
 
 @router.post("/savings-goals")
